@@ -27,11 +27,11 @@ tailwind.config = { theme: { extend: {
 [x-cloak]{display:none!important}
 :focus-visible{outline:2px solid rgb(var(--accent));outline-offset:2px}
 .tag{display:inline-flex;align-items:center;border-radius:9999px;padding:.1rem .6rem;font-size:.75rem;font-weight:500;line-height:1.25rem;white-space:nowrap}
-.tag-lg{padding:.25rem .75rem;font-size:.8125rem}
+.tag-lg{padding:.4rem .85rem;font-size:.875rem}
 .t-pos{background:rgb(var(--pb));color:rgb(var(--pf))}.t-neg{background:rgb(var(--nb));color:rgb(var(--nf))}
 .t-neu{background:rgb(var(--ub));color:rgb(var(--uf))}.t-cus{background:rgb(var(--cb));color:rgb(var(--cf))}
 .t-off{color:rgb(var(--mute));box-shadow:inset 0 0 0 1px rgb(var(--line))}.t-on{box-shadow:inset 0 0 0 1px currentColor}
-.fld{width:100%;border-radius:.5rem;border:1px solid rgb(var(--line));background:rgb(var(--card));padding:.5rem .75rem;font-size:1rem}
+.fld{width:100%;border-radius:.5rem;border:1px solid rgb(var(--line));background:rgb(var(--card));padding:.65rem .75rem;font-size:1rem}
 .fld:focus{border-color:rgb(var(--accent));outline:none}
 @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms!important}}
 </style>
@@ -53,6 +53,7 @@ tailwind.config = { theme: { extend: {
 <header x-show="authed" x-cloak class="sticky top-0 z-30 border-b border-line bg-paper/90 backdrop-blur">
   <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3 sm:px-6">
     <a href="#/" class="font-serif text-xl font-semibold tracking-tight">Horse Note Diary</a>
+    <span x-show="local" x-cloak class="tag t-neu">Locale</span>
     <div class="relative order-3 w-full sm:order-none sm:w-auto sm:max-w-xl sm:flex-1" @click.outside="open=false">
       <label for="search" class="sr-only">Cerca un cavallo</label>
       <input id="search" x-ref="search" x-model="q" autocomplete="off" placeholder="Cerca un cavallo   ( / )"
@@ -69,12 +70,13 @@ tailwind.config = { theme: { extend: {
         </template>
       </ul>
     </div>
-    <button @click="openNew()" class="ml-auto rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-card hover:opacity-90">Nuova nota</button>
-    <button @click="logout()" class="text-sm text-mute hover:text-ink">Esci</button>
+    <button @click="openNew()" class="ml-auto hidden rounded-lg sm:block bg-accent px-4 py-2.5 text-sm font-medium text-card hover:opacity-90">Nuova nota</button>
+    <button x-show="local" @click="resetLocal()" class="ml-auto text-sm text-mute hover:text-ink sm:ml-0">Azzera prove</button>
+    <button x-show="!local" @click="logout()" class="ml-auto text-sm text-mute hover:text-ink sm:ml-0">Esci</button>
   </div>
 </header>
 
-<main class="mx-auto max-w-6xl px-4 py-8 sm:px-6" x-show="ready" x-cloak>
+<main class="mx-auto max-w-6xl px-4 pb-24 pt-8 sm:px-6" x-show="ready" x-cloak>
 
   <!-- DASHBOARD -->
   <div x-show="view==='dash'">
@@ -177,8 +179,8 @@ tailwind.config = { theme: { extend: {
               </div>
               <p class="mt-3 whitespace-pre-line leading-relaxed" x-text="p.notes"></p>
               <div class="mt-3 flex gap-4 text-sm text-mute">
-                <button @click="openEdit(p)" class="hover:text-ink">Modifica</button>
-                <button @click="remove(p)" class="hover:text-danger">Elimina</button>
+                <button @click="openEdit(p)" class="px-1 py-2 hover:text-ink">Modifica</button>
+                <button @click="remove(p)" class="px-1 py-2 hover:text-danger">Elimina</button>
               </div>
             </div>
           </li>
@@ -223,7 +225,10 @@ tailwind.config = { theme: { extend: {
     <form class="flex min-h-0 flex-1 flex-col" @submit.prevent="save()" @keydown.ctrl.enter="save()" @keydown.meta.enter="save()">
       <div class="flex items-center justify-between border-b border-line px-6 py-4">
         <h2 id="dlg" class="font-serif text-xl font-semibold" x-text="form.id ? 'Modifica nota' : 'Nuova nota'"></h2>
-        <button type="button" @click="closeDrawer()" class="text-sm text-mute hover:text-ink">Chiudi</button>
+        <div class="flex gap-4">
+          <button type="button" x-show="!form.id && (form.notes || form.horse_name)" @click="discard()" class="text-sm text-mute hover:text-danger">Scarta bozza</button>
+          <button type="button" @click="closeDrawer()" class="text-sm text-mute hover:text-ink">Chiudi</button>
+        </div>
       </div>
 
       <div class="flex-1 space-y-5 overflow-y-auto px-6 py-5">
@@ -241,26 +246,28 @@ tailwind.config = { theme: { extend: {
           <p class="mt-1.5 text-xs text-mute" x-text="nameHint"></p>
         </div>
 
-        <div class="grid grid-cols-2 gap-3">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div><label for="f-date" class="mb-1.5 block text-sm font-medium">Data</label><input id="f-date" type="date" x-model="form.race_date" required class="fld"></div>
           <div>
             <span class="mb-1.5 block text-sm font-medium">Valutazione visiva</span>
-            <div class="flex h-[2.6rem] items-center gap-2" role="group" aria-label="Valutazione da 1 a 5">
+            <div class="flex items-center gap-2.5" role="group" aria-label="Valutazione da 1 a 5">
               <template x-for="n in 5" :key="n">
                 <button type="button" @click="form.rating = form.rating===n ? null : n" :aria-label="'Valutazione '+n" :aria-pressed="form.rating>=n"
-                        class="h-5 w-5 rounded-full border-2 border-accent" :class="form.rating>=n ? 'bg-accent' : ''"></button>
+                        class="h-9 w-9 rounded-full border-2 border-accent" :class="form.rating>=n ? 'bg-accent' : ''"></button>
               </template>
             </div>
           </div>
         </div>
 
-        <div class="grid grid-cols-3 gap-3">
+        <div class="grid grid-cols-2 gap-3">
           <div><label for="f-track" class="mb-1.5 block text-sm font-medium">Ippodromo</label><input id="f-track" list="dl-track" x-model="form.track" class="fld" maxlength="60"></div>
           <div><label for="f-dist" class="mb-1.5 block text-sm font-medium">Distanza</label><input id="f-dist" x-model="form.distance" placeholder="1600m" class="fld" maxlength="30"></div>
           <div><label for="f-going" class="mb-1.5 block text-sm font-medium">Terreno</label><input id="f-going" list="dl-going" x-model="form.going" class="fld" maxlength="30"></div>
+          <div><label for="f-type" class="mb-1.5 block text-sm font-medium">Tipo di gara</label><input id="f-type" list="dl-type" x-model="form.race_type" class="fld" maxlength="30"></div>
         </div>
         <datalist id="dl-track"><template x-for="t in meta.tracks" :key="t.name"><option :value="t.name"></option></template></datalist>
         <datalist id="dl-going"><option>Buono</option><option>Soffice</option><option>Pesante</option><option>Leggero</option><option>AW</option></datalist>
+        <datalist id="dl-type"><option>Maiden</option><option>Condizionata</option><option>Handicap</option><option>Reclamare</option><option>Listed</option><option>Gruppo 3</option><option>Gruppo 2</option><option>Gruppo 1</option><option>Ostacoli</option></datalist>
 
         <div>
           <span class="mb-2 block text-sm font-medium">Tag rapidi</span>
@@ -285,12 +292,19 @@ tailwind.config = { theme: { extend: {
       </div>
 
       <div class="flex items-center justify-between gap-3 border-t border-line px-6 py-4">
-        <span class="text-xs text-mute">Ctrl+Invio per salvare</span>
-        <button type="submit" :disabled="saving" class="rounded-lg bg-accent px-5 py-2.5 text-sm font-medium text-card hover:opacity-90 disabled:opacity-50">Salva nota</button>
+        <span class="hidden text-xs text-mute sm:inline">Ctrl+Invio per salvare</span>
+        <div class="ml-auto flex gap-2">
+          <button type="button" x-show="!form.id" @click="save(true)" :disabled="saving" class="rounded-lg border border-line px-4 py-3 text-sm font-medium hover:bg-soft disabled:opacity-50">Salva e aggiungi altro</button>
+          <button type="submit" :disabled="saving" class="rounded-lg bg-accent px-5 py-3 text-sm font-medium text-card hover:opacity-90 disabled:opacity-50">Salva nota</button>
+        </div>
       </div>
     </form>
   </aside>
 </div>
+
+<button x-show="authed" x-cloak @click="openNew()" aria-label="Nuova nota" class="fixed bottom-5 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-card shadow-lg sm:hidden">
+  <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+</button>
 
 <div x-show="toastMsg" x-cloak x-transition.opacity role="status" class="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-ink px-4 py-2 text-sm text-paper shadow-lg" x-text="toastMsg"></div>
 
@@ -298,6 +312,49 @@ tailwind.config = { theme: { extend: {
 // Da Supabase: Project Settings > API (URL del progetto e chiave anon/publishable)
 const SB_URL = 'https://usvgkrjqdwiofzhsphht.supabase.co', SB_KEY = 'sb_publishable_8KWrc0WV-Jvao467WqUUpg_XEt-UoPb';
 let sb;
+// true = prova in locale con dati nel browser (niente Supabase, niente login); false = versione online
+const LOCAL = false;
+function localDb() {
+  const KEY = 'hnd-local';
+  const seed = () => {
+    const day = n => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
+    const H = ['VARENNE', 'TORNADO BAY', 'LUNA DI SETA', 'GRAN CAPITANO', 'SIR RENATO'];
+    const P = [
+      [0,2,'Capannelle','1600m','Buono','Handicap',4,['Finisce forte','Bene sul terreno'],'Rimontato in retta con facilità, passo lungo e rilassato.'],
+      [0,30,'San Siro','2000m','Pesante','Listed',3,['Terreno contrario','Chiuso in retta'],'Mai a suo agio sul pesante, chiuso all’ingresso in retta.'],
+      [1,2,'Capannelle','1600m','Buono','Handicap',2,['Partenza Lenta','Largo in curva'],'Scattato male, largo in curva, finito senza spunto.'],
+      [1,45,'Pisa','1800m','Soffice','Maiden',3,['Tira molto'],'Tira molto nella prima parte, spreca energie.'],
+      [2,9,'San Siro','1400m','Buono','Condizionata',5,['Margine in mano','Finisce forte'],'Vinto con margine in mano, fantino mai impegnato.'],
+      [3,16,'Milano','2400m','Buono','Gruppo 3',4,['Falsa andatura','Finisce forte'],'Andatura lenta, ha finito forte: da rivedere su un ritmo vero.'],
+      [3,60,'Pisa','2000m','Soffice','Handicap',3,['Bene sul terreno'],'Si trova bene sul soffice.'],
+      [4,5,'Capannelle','1200m','Buono','Reclamare',2,['Partenza Lenta'],'Partenza lenta, mai in corsa.'],
+      [4,40,'Firenze','1200m','Buono','Reclamare',3,[],'Corsa regolare, senza nulla di particolare.']];
+    return {next:100, horses: H.map((name, i) => ({id:i+1, name, in_watchlist:i < 2})),
+      performances: P.map((r, i) => ({id:i+1, horse_id:r[0]+1, race_date:day(r[1]), track:r[2], distance:r[3], going:r[4], race_type:r[5], rating:r[6], tags:r[7], notes:r[8], created_at:new Date().toISOString()}))};
+  };
+  const get = () => JSON.parse(localStorage.getItem(KEY) || 'null') || seed();
+  // Imita la parte di supabase-js che usa l'app (select/insert/update/delete + eq/in/single)
+  return { from(t) {
+    let op = 'select', row, flt = () => true, one = false;
+    const b = {
+      select() { return b; }, insert(r) { op = 'insert'; row = r; return b; }, update(r) { op = 'update'; row = r; return b; },
+      delete() { op = 'delete'; return b; }, eq(c, v) { flt = x => x[c] === v; return b; }, in(c, vs) { flt = x => vs.includes(x[c]); return b; },
+      single() { one = true; return b; },
+      then(res, rej) {
+        try {
+          const d = get(); let out;
+          if (op === 'insert') { out = [{id: d.next++, ...(t === 'horses' ? {in_watchlist:false} : {created_at:new Date().toISOString()}), ...row}]; d[t].push(out[0]); }
+          else if (op === 'update') { out = d[t].filter(flt); out.forEach(x => Object.assign(x, row)); }
+          else if (op === 'delete') { out = d[t].filter(flt); d[t] = d[t].filter(x => !flt(x)); d.performances = d.performances.filter(p => d.horses.some(h => h.id === p.horse_id)); }
+          else out = d[t];
+          localStorage.setItem(KEY, JSON.stringify(d));
+          res({data: structuredClone(one ? (out[0] ?? null) : out), error: null});
+        } catch (e) { (rej || res)({data: null, error: {message: e.message}}); }
+      }
+    };
+    return b;
+  }};
+}
 const PRESET = ['Partenza Lenta','Chiuso in retta','Tira molto','Bene sul terreno','Terreno contrario','Falsa andatura','Largo in curva','Finisce forte','Margine in mano'];
 // Colore sobrio per significato: verde = positivo, argilla = negativo, ocra = andamento di gara
 const KIND = {'finisce forte':'pos','margine in mano':'pos','bene sul terreno':'pos','partenza lenta':'neg','chiuso in retta':'neg','terreno contrario':'neg','largo in curva':'neg','tira molto':'neu','falsa andatura':'neu'};
@@ -305,10 +362,10 @@ const norm = s => (s || '').replace(/\s+/g, ' ').trim().toUpperCase();
 const pretty = n => (n || '').toLowerCase().replace(/(^|[\s-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase())
                               .replace(/(^|[\s-])(\p{L}')(\p{L})/gu, (m, a, b, c) => a + b + c.toUpperCase());
 const today = () => { const d = new Date(); return [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')].join('-'); };
-const blank = () => ({id:null, horse_name:'', race_date:today(), track:'', distance:'', going:'', rating:null, tags:[], notes:'', in_watchlist:false});
+const blank = () => ({id:null, horse_name:'', race_date:today(), track:'', distance:'', going:'', race_type:'', rating:null, tags:[], notes:'', in_watchlist:false});
 
 function diary() { return {
-  view:'dash', ready:false, authed:false, started:false, loginErr:'', email:'', pass:'', horses:[], meta:{tags:[],tracks:[]}, dash:{watchlist:[],recent:[]}, horse:null,
+  view:'dash', ready:false, authed:false, started:false, local:LOCAL, loginErr:'', email:'', pass:'', horses:[], meta:{tags:[],tracks:[]}, dash:{watchlist:[],recent:[]}, horse:null,
   filter:{kind:'',value:'',items:[]}, q:'', open:false, drawer:false, saving:false, error:'', nameOpen:false,
   customTag:'', matched:null, toastMsg:'', form:blank(), pretty,
 
@@ -361,14 +418,15 @@ function diary() { return {
     const going = sp(body.going), seen = new Set(), tags = [];
     for (let t of body.tags || []) { t = up(sp(t).slice(0, 40)); if (t && !seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); tags.push(t); } }
     const row = {horse_id:h.id, race_date:body.race_date, track: sp(body.track).split(' ').map(up).join(' ') || null, distance: dist || null,
-                 going: going ? up(going) : null, rating: body.rating || null, tags, notes};
+                 going: going ? up(going) : null, race_type: sp(body.race_type) ? up(sp(body.race_type)) : null, rating: body.rating || null, tags, notes};
     const saved = ok(await (method === 'PUT' ? sb.from('performances').update(row).eq('id', id) : sb.from('performances').insert(row)).select().single());
     if (body.in_watchlist != null) ok(await sb.from('horses').update({in_watchlist: body.in_watchlist}).eq('id', h.id));
     await prune();
     return {...saved, horse_name: name};
   },
   async init() {
-    sb = supabase.createClient(SB_URL, SB_KEY);
+    sb = LOCAL ? localDb() : supabase.createClient(SB_URL, SB_KEY);
+    if (LOCAL) { this.authed = true; return this.start(); }
     const {data} = await sb.auth.getSession();
     if (data.session) { this.authed = true; await this.start(); }
   },
@@ -384,6 +442,7 @@ function diary() { return {
     await this.lists();
     addEventListener('hashchange', () => { this.route(); scrollTo(0, 0); });
     await this.route(); this.ready = true;
+    this.$watch('form', f => { if (this.drawer && !f.id) try { localStorage.setItem('hnd-draft', JSON.stringify(f)); } catch {} });
     // Se il nome digitato coincide con un cavallo esistente, eredita il suo stato di watchlist
     this.$watch('form.horse_name', v => {
       const h = this.horses.find(x => x.name === norm(v)), id = h ? h.id : null;
@@ -449,26 +508,36 @@ function diary() { return {
     h = h || this.horses.find(x => x.name === norm(name));
     this.matched = h ? h.id : null;
     this.form = {...blank(), horse_name: h ? pretty(h.name) : pretty(name), in_watchlist: h ? h.in_watchlist : false};
+    const dr = !name && !h && JSON.parse(localStorage.getItem('hnd-draft') || 'null');
+    if (dr && (dr.notes || dr.horse_name)) { this.form = {...blank(), ...dr, id:null}; this.matched = null; this.toast('Bozza ripristinata'); }
     this.show(!!this.form.horse_name);
   },
   openEdit(p) {
     const h = this.horses.find(x => x.id === p.horse_id);
     this.matched = p.horse_id;
-    this.form = {id:p.id, horse_name:pretty(p.horse_name), race_date:p.race_date, track:p.track||'', distance:p.distance||'', going:p.going||'',
+    this.form = {id:p.id, horse_name:pretty(p.horse_name), race_date:p.race_date, track:p.track||'', distance:p.distance||'', going:p.going||'', race_type:p.race_type||'',
                  rating:p.rating, tags:[...p.tags], notes:p.notes, in_watchlist: h ? h.in_watchlist : false};
     this.show(true);
   },
+  // Gara in sequenza: tiene data, ippodromo, distanza, terreno e tipo; svuota il resto
+  next() {
+    const f = this.form; this.matched = null;
+    this.form = {...blank(), race_date:f.race_date, track:f.track, distance:f.distance, going:f.going, race_type:f.race_type};
+    this.$nextTick(() => this.$refs.name.focus());
+  },
+  discard() { localStorage.removeItem('hnd-draft'); this.matched = null; this.form = blank(); this.$refs.name.focus(); },
+  resetLocal() { if (confirm('Cancellare i dati di prova locali?')) { localStorage.removeItem('hnd-local'); location.reload(); } },
   closeDrawer() { this.drawer = false; document.body.style.overflow = ''; },
-  async save() {
+  async save(again = false) {
     const f = this.form; this.error = '';
     if (!norm(f.horse_name)) { this.error = 'Inserisci il nome del cavallo.'; this.$refs.name.focus(); return; }
     if (!f.notes.trim()) { this.error = 'Scrivi almeno una riga di nota.'; this.$refs.notes.focus(); return; }
     if (this.saving) return; this.saving = true;
     try {
       const saved = await this.api(f.id ? '/performances/' + f.id : '/performances', f.id ? 'PUT' : 'POST', {
-        horse_name:f.horse_name, race_date:f.race_date, track:f.track, distance:f.distance, going:f.going,
+        horse_name:f.horse_name, race_date:f.race_date, track:f.track, distance:f.distance, going:f.going, race_type:f.race_type,
         rating:f.rating, tags:f.tags, notes:f.notes, in_watchlist:f.in_watchlist});
-      this.closeDrawer(); this.toast('Nota salvata');
+      localStorage.removeItem('hnd-draft'); again ? this.next() : this.closeDrawer(); this.toast('Nota salvata');
       if (f.id && this.view === 'horse' && this.horse && saved.horse_id !== this.horse.id) { await this.lists(); location.hash = '#/horse/' + saved.horse_id; }
       else await this.reload();
     } catch (e) { this.error = e.message; } finally { this.saving = false; }
@@ -498,7 +567,7 @@ function diary() { return {
   },
   kind: t => 't-' + (KIND[t.toLowerCase()] || 'cus'),
   dots: r => [1,2,3,4,5].map(i => i <= (r || 0)),
-  info: p => [p.track, p.distance, p.going].filter(Boolean),
+  info: p => [p.race_type, p.track, p.distance, p.going].filter(Boolean),
   fd(s, short) {
     if (!s) return '';
     const [y, m, d] = s.split('-').map(Number);
@@ -506,7 +575,7 @@ function diary() { return {
   },
   toast(m) { this.toastMsg = m; clearTimeout(this._t); this._t = setTimeout(() => this.toastMsg = '', 2200); },
 }; }
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
 </html>

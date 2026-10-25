@@ -139,6 +139,21 @@ tailwind.config = { theme: { extend: {
         </ul>
       </section>
     </div>
+
+    <section class="mt-10" x-show="dash.shared.length" aria-labelledby="sh-h">
+      <h2 id="sh-h" class="font-serif text-2xl font-semibold">Condivise con me</h2>
+      <ul class="mt-4 divide-y divide-line rounded-xl border border-line bg-card">
+        <template x-for="p in dash.shared" :key="p.id">
+          <li><a :href="sharedHref(p)" class="block px-4 py-3.5 hover:bg-soft/60">
+            <div class="flex flex-wrap items-baseline justify-between gap-x-3">
+              <span class="font-serif text-lg font-semibold" x-text="pretty(p.horse_name)"></span>
+              <span class="flex gap-x-3 text-xs text-mute"><span x-text="'Condivisa da ' + p.author"></span><span x-text="fd(p.race_date, true)"></span></span>
+            </div>
+            <p class="mt-0.5 line-clamp-2 text-sm text-mute" x-text="p.notes"></p>
+          </a></li>
+        </template>
+      </ul>
+    </section>
   </div>
 
   <!-- SCHEDA CAVALLO -->
@@ -149,12 +164,14 @@ tailwind.config = { theme: { extend: {
         <div>
           <h1 class="font-serif text-4xl font-semibold tracking-tight sm:text-5xl" x-text="pretty(horse.name)"></h1>
           <p class="mt-2 text-sm text-mute" x-text="summary"></p>
+          <p x-show="horse.profile_note" class="mt-4 max-w-xl whitespace-pre-line rounded-lg bg-soft px-4 py-3 text-sm leading-relaxed" x-text="horse.profile_note"></p>
         </div>
         <div class="flex gap-2">
           <button @click="toggleWatch()" :aria-pressed="horse.in_watchlist" class="flex items-center gap-2 rounded-lg border border-line bg-card px-3.5 py-2 text-sm hover:bg-soft">
             <svg class="h-4 w-4 text-gold" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" :fill="horse.in_watchlist?'currentColor':'none'"><path d="M12 3l2.7 5.8 6.3.7-4.7 4.3 1.3 6.2L12 17l-5.6 3 1.3-6.2L3 9.5l6.3-.7z"/></svg>
             <span x-text="horse.in_watchlist ? 'In watchlist' : 'Segui'"></span>
           </button>
+          <button @click="openProfile()" class="rounded-lg border border-line bg-card px-3.5 py-2 text-sm hover:bg-soft">Modifica profilo</button>
           <button @click="openNew('',horse)" class="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-card hover:opacity-90">Aggiungi nota</button>
         </div>
       </div>
@@ -173,12 +190,13 @@ tailwind.config = { theme: { extend: {
                   <template x-for="on in dots(p.rating)"><span class="h-2 w-2 rounded-full" :class="on?'bg-accent':'bg-line'"></span></template>
                 </span>
                 <span class="flex gap-x-3 text-sm text-mute"><template x-for="m in info(p)"><span x-text="m"></span></template></span>
+                <span x-show="!p.mine" class="tag t-neu" x-text="'Condivisa da ' + p.author"></span><span x-show="p.mine && p.shared" class="tag t-pos">Condivisa</span>
               </div>
               <div class="mt-2.5 flex flex-wrap gap-1.5" x-show="p.tags.length">
                 <template x-for="t in p.tags" :key="t"><span class="tag" :class="kind(t)" x-text="t"></span></template>
               </div>
               <p class="mt-3 whitespace-pre-line leading-relaxed" x-text="p.notes"></p>
-              <div class="mt-3 flex gap-4 text-sm text-mute">
+              <div x-show="p.mine" class="mt-3 flex gap-4 text-sm text-mute">
                 <button @click="openEdit(p)" class="px-1 py-2 hover:text-ink">Modifica</button>
                 <button @click="remove(p)" class="px-1 py-2 hover:text-danger">Elimina</button>
               </div>
@@ -288,6 +306,7 @@ tailwind.config = { theme: { extend: {
         </div>
 
         <label class="flex items-center gap-3 text-sm"><input type="checkbox" x-model="form.in_watchlist" class="h-4 w-4 accent-[rgb(var(--accent))]"> Tieni in watchlist per la prossima uscita</label>
+        <label class="flex items-center gap-3 text-sm"><input type="checkbox" x-model="form.shared" class="h-4 w-4 accent-[rgb(var(--accent))]"> Condividi questa nota con gli altri utenti</label>
         <p x-show="error" role="alert" class="text-sm text-danger" x-text="error"></p>
       </div>
 
@@ -302,6 +321,23 @@ tailwind.config = { theme: { extend: {
   </aside>
 </div>
 
+<div x-show="hp.open" x-cloak x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center p-4" @keydown.escape.window="hp.open = false">
+  <div class="absolute inset-0 bg-ink/40" @click="hp.open = false"></div>
+  <form class="relative w-full max-w-md space-y-4 rounded-2xl bg-paper p-6 shadow-2xl" @submit.prevent="saveProfile()" role="dialog" aria-modal="true" aria-labelledby="hp-h">
+    <h2 id="hp-h" class="font-serif text-xl font-semibold">Profilo del cavallo</h2>
+    <div><label for="hp-name" class="mb-1.5 block text-sm font-medium">Nome</label><input id="hp-name" x-model="hp.name" required maxlength="80" class="fld"></div>
+    <div><label for="hp-note" class="mb-1.5 block text-sm font-medium">Nota sul cavallo</label><textarea id="hp-note" x-model="hp.note" rows="4" placeholder="Caratteristiche generali, punti di forza, cosa tenere d’occhio" class="fld leading-relaxed"></textarea></div>
+    <p x-show="hp.err" role="alert" class="text-sm text-danger" x-text="hp.err"></p>
+    <div class="flex items-center justify-between gap-3">
+      <button type="button" @click="deleteHorse()" class="py-2 text-sm text-danger hover:underline">Elimina cavallo</button>
+      <div class="flex gap-2">
+        <button type="button" @click="hp.open = false" class="rounded-lg border border-line px-4 py-2.5 text-sm hover:bg-soft">Annulla</button>
+        <button class="rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-card hover:opacity-90">Salva</button>
+      </div>
+    </div>
+  </form>
+</div>
+
 <button x-show="authed" x-cloak @click="openNew()" aria-label="Nuova nota" class="fixed bottom-5 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-card shadow-lg sm:hidden">
   <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
 </button>
@@ -310,12 +346,12 @@ tailwind.config = { theme: { extend: {
 
 <script>
 // Da Supabase: Project Settings > API (URL del progetto e chiave anon/publishable)
-const SB_URL = 'https://usvgkrjqdwiofzhsphht.supabase.co', SB_KEY = 'sb_publishable_8KWrc0WV-Jvao467WqUUpg_XEt-UoPb';
-let sb;
+const SB_URL = 'INCOLLA_QUI_URL', SB_KEY = 'INCOLLA_QUI_CHIAVE';
+let sb, uid;
 // true = prova in locale con dati nel browser (niente Supabase, niente login); false = versione online
-const LOCAL = false;
+const LOCAL = true;
 function localDb() {
-  const KEY = 'hnd-local';
+  const KEY = 'hnd-local2';
   const seed = () => {
     const day = n => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
     const H = ['VARENNE', 'TORNADO BAY', 'LUNA DI SETA', 'GRAN CAPITANO', 'SIR RENATO'];
@@ -329,8 +365,12 @@ function localDb() {
       [3,60,'Pisa','2000m','Soffice','Handicap',3,['Bene sul terreno'],'Si trova bene sul soffice.'],
       [4,5,'Capannelle','1200m','Buono','Reclamare',2,['Partenza Lenta'],'Partenza lenta, mai in corsa.'],
       [4,40,'Firenze','1200m','Buono','Reclamare',3,[],'Corsa regolare, senza nulla di particolare.']];
-    return {next:100, horses: H.map((name, i) => ({id:i+1, name, in_watchlist:i < 2})),
-      performances: P.map((r, i) => ({id:i+1, horse_id:r[0]+1, race_date:day(r[1]), track:r[2], distance:r[3], going:r[4], race_type:r[5], rating:r[6], tags:r[7], notes:r[8], created_at:new Date().toISOString()}))};
+    const now = new Date().toISOString();
+    return {next:100, profiles:[{user_id:'me', display_name:'Tu'}, {user_id:'u2', display_name:'Marco'}],
+      horses: [...H.map((name, i) => ({id:i+1, name, in_watchlist:i < 2, user_id:'me', profile_note: i === 0 ? 'Da seguire sul miglio: parte piano ma ha un buon finale.' : null})),
+               {id:90, name:'VARENNE', in_watchlist:false, user_id:'u2', profile_note:null}],
+      performances: [...P.map((r, k) => ({id:k+1, horse_id:r[0]+1, race_date:day(r[1]), track:r[2], distance:r[3], going:r[4], race_type:r[5], rating:r[6], tags:r[7], notes:r[8], created_at:now, user_id:'me', shared:k === 0})),
+        {id:91, horse_id:90, race_date:day(6), track:'Roma', distance:'1600m', going:'Buono', race_type:'Handicap', rating:5, tags:['Margine in mano'], notes:'Visto dal vivo: vince in scioltezza, fantino mai impegnato.', created_at:now, user_id:'u2', shared:true}]};
   };
   const get = () => JSON.parse(localStorage.getItem(KEY) || 'null') || seed();
   // Imita la parte di supabase-js che usa l'app (select/insert/update/delete + eq/in/single)
@@ -343,7 +383,7 @@ function localDb() {
       then(res, rej) {
         try {
           const d = get(); let out;
-          if (op === 'insert') { out = [{id: d.next++, ...(t === 'horses' ? {in_watchlist:false} : {created_at:new Date().toISOString()}), ...row}]; d[t].push(out[0]); }
+          if (op === 'insert') { out = [{id: d.next++, ...(t === 'horses' ? {in_watchlist:false, profile_note:null} : {created_at:new Date().toISOString(), shared:false}), user_id:'me', ...row}]; d[t].push(out[0]); }
           else if (op === 'update') { out = d[t].filter(flt); out.forEach(x => Object.assign(x, row)); }
           else if (op === 'delete') { out = d[t].filter(flt); d[t] = d[t].filter(x => !flt(x)); d.performances = d.performances.filter(p => d.horses.some(h => h.id === p.horse_id)); }
           else out = d[t];
@@ -362,22 +402,23 @@ const norm = s => (s || '').replace(/\s+/g, ' ').trim().toUpperCase();
 const pretty = n => (n || '').toLowerCase().replace(/(^|[\s-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase())
                               .replace(/(^|[\s-])(\p{L}')(\p{L})/gu, (m, a, b, c) => a + b + c.toUpperCase());
 const today = () => { const d = new Date(); return [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')].join('-'); };
-const blank = () => ({id:null, horse_name:'', race_date:today(), track:'', distance:'', going:'', race_type:'', rating:null, tags:[], notes:'', in_watchlist:false});
+const blank = () => ({id:null, horse_name:'', race_date:today(), track:'', distance:'', going:'', race_type:'', shared:false, rating:null, tags:[], notes:'', in_watchlist:false});
 
 function diary() { return {
-  view:'dash', ready:false, authed:false, started:false, local:LOCAL, loginErr:'', email:'', pass:'', horses:[], meta:{tags:[],tracks:[]}, dash:{watchlist:[],recent:[]}, horse:null,
+  view:'dash', ready:false, authed:false, started:false, local:LOCAL, hp:{open:false, name:'', note:'', err:''}, loginErr:'', email:'', pass:'', horses:[], meta:{tags:[],tracks:[]}, dash:{watchlist:[],recent:[],shared:[]}, horse:null,
   filter:{kind:'',value:'',items:[]}, q:'', open:false, drawer:false, saving:false, error:'', nameOpen:false,
   customTag:'', matched:null, toastMsg:'', form:blank(), pretty,
 
   async api(path, method='GET', body) {
     const [pp, qs] = path.split('?'), seg = pp.split('/').filter(Boolean), qp = new URLSearchParams(qs || ''), e = seg[0], id = Number(seg[1]);
     const ok = r => { if (r.error) throw new Error(r.error.message); return r.data; };
+    // horses/perfs = i miei; shared = note che altri hanno condiviso con me (le regole del database nascondono il resto)
     const load = async () => {
-      const [h, p] = await Promise.all([sb.from('horses').select('*'), sb.from('performances').select('*')]);
-      const horses = ok(h), perfs = ok(p), by = Object.fromEntries(horses.map(x => [x.id, x]));
-      perfs.forEach(x => x.horse_name = by[x.horse_id]?.name);
-      perfs.sort((a, b) => b.race_date.localeCompare(a.race_date) || b.id - a.id);
-      return {horses, perfs};
+      const [h, p, pr] = await Promise.all([sb.from('horses').select('*'), sb.from('performances').select('*'), sb.from('profiles').select('*')]);
+      const all = ok(h), allP = ok(p), who = Object.fromEntries(ok(pr).map(x => [x.user_id, x.display_name])), by = Object.fromEntries(all.map(x => [x.id, x]));
+      allP.forEach(x => { x.horse_name = by[x.horse_id]?.name; x.mine = x.user_id === uid; x.author = who[x.user_id] || 'un altro utente'; });
+      allP.sort((a, b) => b.race_date.localeCompare(a.race_date) || b.id - a.id);
+      return {horses: all.filter(x => x.user_id === uid), perfs: allP.filter(x => x.mine), shared: allP.filter(x => !x.mine && x.shared)};
     };
     // i cavalli esistono solo tramite le note: via quelli senza note e fuori watchlist
     const prune = async () => {
@@ -394,17 +435,38 @@ function diary() { return {
     const sp = s => (s || '').replace(/\s+/g, ' ').trim(), up = s => s.charAt(0).toUpperCase() + s.slice(1);
 
     if (method === 'GET') {
-      const {horses, perfs} = await load();
+      const {horses, perfs, shared} = await load();
       if (e === 'horses' && !seg[1]) return summ(horses, perfs);
-      if (e === 'horses') { const h = horses.find(x => x.id === id); if (!h) throw new Error('Cavallo non trovato'); return {...h, performances: perfs.filter(p => p.horse_id === id)}; }
+      if (e === 'horses') {
+        const h = horses.find(x => x.id === id); if (!h) throw new Error('Cavallo non trovato');
+        // le mie note + quelle condivise da altri sullo stesso nome
+        const list = [...perfs.filter(p => p.horse_id === id), ...shared.filter(p => p.horse_name === h.name)];
+        return {...h, performances: list.sort((a, b) => b.race_date.localeCompare(a.race_date) || b.id - a.id)};
+      }
       if (e === 'dashboard') return {
         watchlist: summ(horses, perfs).filter(h => h.in_watchlist).sort((a, b) => (b.last_date || '').localeCompare(a.last_date || '')),
-        recent: [...perfs].sort((a, b) => b.id - a.id).slice(0, 10)};
+        recent: [...perfs].sort((a, b) => b.id - a.id).slice(0, 10), shared: shared.slice(0, 10)};
       if (e === 'meta') return {tracks: cnt(perfs.map(p => p.track).filter(Boolean)), tags: cnt(perfs.flatMap(p => p.tags))};
       const t = qp.get('tag')?.toLowerCase(), k = qp.get('track')?.toLowerCase();
       return perfs.filter(p => (!t || p.tags.some(x => x.toLowerCase() === t)) && (!k || (p.track || '').toLowerCase() === k));
     }
-    if (e === 'horses') { ok(await sb.from('horses').update({in_watchlist: body.in_watchlist}).eq('id', id)); return {id, in_watchlist: body.in_watchlist}; }
+    if (e === 'horses') {
+      if (seg[2] === 'watchlist') { ok(await sb.from('horses').update({in_watchlist: body.in_watchlist}).eq('id', id)); return {id, in_watchlist: body.in_watchlist}; }
+      if (method === 'DELETE') { ok(await sb.from('horses').delete().eq('id', id)); return {ok:true}; }  // le note collegate vanno via con lui
+      const {horses} = await load(), name = norm(body.name), note = (body.profile_note || '').trim() || null;
+      if (!name) throw new Error('Il nome non può essere vuoto.');
+      const clash = horses.find(x => x.name === name && x.id !== id);
+      if (clash) {  // unione di due schede: le note passano al cavallo già esistente
+        if (!body.merge) throw new Error('Esiste già un cavallo con questo nome.');
+        const me = horses.find(x => x.id === id);
+        ok(await sb.from('performances').update({horse_id: clash.id}).eq('horse_id', id));
+        ok(await sb.from('horses').update({in_watchlist: clash.in_watchlist || me.in_watchlist, profile_note: clash.profile_note || note}).eq('id', clash.id));
+        ok(await sb.from('horses').delete().eq('id', id));
+        return {id: clash.id};
+      }
+      ok(await sb.from('horses').update({name, profile_note: note}).eq('id', id));
+      return {id};
+    }
     if (method === 'DELETE') { ok(await sb.from('performances').delete().eq('id', id)); await prune(); return {ok:true}; }
 
     // POST / PUT di una nota: valida, normalizza, crea il cavallo se nuovo
@@ -418,7 +480,7 @@ function diary() { return {
     const going = sp(body.going), seen = new Set(), tags = [];
     for (let t of body.tags || []) { t = up(sp(t).slice(0, 40)); if (t && !seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); tags.push(t); } }
     const row = {horse_id:h.id, race_date:body.race_date, track: sp(body.track).split(' ').map(up).join(' ') || null, distance: dist || null,
-                 going: going ? up(going) : null, race_type: sp(body.race_type) ? up(sp(body.race_type)) : null, rating: body.rating || null, tags, notes};
+                 going: going ? up(going) : null, race_type: sp(body.race_type) ? up(sp(body.race_type)) : null, shared: !!body.shared, rating: body.rating || null, tags, notes};
     const saved = ok(await (method === 'PUT' ? sb.from('performances').update(row).eq('id', id) : sb.from('performances').insert(row)).select().single());
     if (body.in_watchlist != null) ok(await sb.from('horses').update({in_watchlist: body.in_watchlist}).eq('id', h.id));
     await prune();
@@ -426,19 +488,20 @@ function diary() { return {
   },
   async init() {
     sb = LOCAL ? localDb() : supabase.createClient(SB_URL, SB_KEY);
-    if (LOCAL) { this.authed = true; return this.start(); }
+    if (LOCAL) { uid = 'me'; this.authed = true; return this.start(); }
     const {data} = await sb.auth.getSession();
-    if (data.session) { this.authed = true; await this.start(); }
+    if (data.session) { uid = data.session.user.id; this.authed = true; await this.start(); }
   },
   async login() {
     this.loginErr = '';
-    const {error} = await sb.auth.signInWithPassword({email:this.email, password:this.pass});
+    const {data, error} = await sb.auth.signInWithPassword({email:this.email, password:this.pass});
     if (error) { this.loginErr = 'Email o password non corrette.'; return; }
-    this.pass = ''; this.authed = true; await this.start();
+    uid = data.user.id; this.pass = ''; this.authed = true; await this.start();
   },
   async logout() { await sb.auth.signOut(); location.hash = ''; location.reload(); },
   async start() {
     if (this.started) return; this.started = true;
+    await this.ensureName();
     await this.lists();
     addEventListener('hashchange', () => { this.route(); scrollTo(0, 0); });
     await this.route(); this.ready = true;
@@ -515,9 +578,34 @@ function diary() { return {
   openEdit(p) {
     const h = this.horses.find(x => x.id === p.horse_id);
     this.matched = p.horse_id;
-    this.form = {id:p.id, horse_name:pretty(p.horse_name), race_date:p.race_date, track:p.track||'', distance:p.distance||'', going:p.going||'', race_type:p.race_type||'',
+    this.form = {id:p.id, horse_name:pretty(p.horse_name), race_date:p.race_date, track:p.track||'', distance:p.distance||'', going:p.going||'', race_type:p.race_type||'', shared:!!p.shared,
                  rating:p.rating, tags:[...p.tags], notes:p.notes, in_watchlist: h ? h.in_watchlist : false};
     this.show(true);
+  },
+  async ensureName() {  // nome mostrato agli altri ("condivisa da ...")
+    if (LOCAL) return;
+    const {data} = await sb.from('profiles').select('user_id').eq('user_id', uid);
+    if (data && data.length) return;
+    const n = (prompt('Che nome vuoi mostrare agli altri utenti?') || '').trim() || 'Utente';
+    await sb.from('profiles').upsert({user_id: uid, display_name: n});
+  },
+  sharedHref(p) { const h = this.horses.find(x => x.name === p.horse_name); return h ? '#/horse/' + h.id : '#/'; },
+  openProfile() { this.hp = {open:true, name:pretty(this.horse.name), note:this.horse.profile_note || '', err:''}; },
+  async saveProfile() {
+    const n = norm(this.hp.name); if (!n) { this.hp.err = 'Il nome non può essere vuoto.'; return; }
+    const clash = this.horses.find(x => x.name === n && x.id !== this.horse.id);
+    if (clash && !confirm('Esiste già ' + pretty(n) + '. Unire le due schede? Tutte le note finiranno su ' + pretty(n) + '.')) return;
+    try {
+      const r = await this.api('/horses/' + this.horse.id, 'PUT', {name:n, profile_note:this.hp.note, merge:!!clash});
+      this.hp.open = false; this.toast('Profilo aggiornato'); await this.lists();
+      if (r.id !== this.horse.id) location.hash = '#/horse/' + r.id; else await this.route();
+    } catch (e) { this.hp.err = e.message; }
+  },
+  async deleteHorse() {
+    const n = this.horse.performances.filter(p => p.mine).length;
+    if (!confirm('Eliminare ' + pretty(this.horse.name) + ' e le sue ' + n + ' note? Non si può annullare.')) return;
+    try { await this.api('/horses/' + this.horse.id, 'DELETE'); this.hp.open = false; this.toast('Cavallo eliminato'); await this.lists(); location.hash = '#/'; }
+    catch (e) { this.hp.err = e.message; }
   },
   // Gara in sequenza: tiene data, ippodromo, distanza, terreno e tipo; svuota il resto
   next() {
@@ -526,7 +614,7 @@ function diary() { return {
     this.$nextTick(() => this.$refs.name.focus());
   },
   discard() { localStorage.removeItem('hnd-draft'); this.matched = null; this.form = blank(); this.$refs.name.focus(); },
-  resetLocal() { if (confirm('Cancellare i dati di prova locali?')) { localStorage.removeItem('hnd-local'); location.reload(); } },
+  resetLocal() { if (confirm('Cancellare i dati di prova locali?')) { localStorage.removeItem('hnd-local2'); location.reload(); } },
   closeDrawer() { this.drawer = false; document.body.style.overflow = ''; },
   async save(again = false) {
     const f = this.form; this.error = '';
@@ -535,7 +623,7 @@ function diary() { return {
     if (this.saving) return; this.saving = true;
     try {
       const saved = await this.api(f.id ? '/performances/' + f.id : '/performances', f.id ? 'PUT' : 'POST', {
-        horse_name:f.horse_name, race_date:f.race_date, track:f.track, distance:f.distance, going:f.going, race_type:f.race_type,
+        horse_name:f.horse_name, race_date:f.race_date, track:f.track, distance:f.distance, going:f.going, race_type:f.race_type, shared:f.shared,
         rating:f.rating, tags:f.tags, notes:f.notes, in_watchlist:f.in_watchlist});
       localStorage.removeItem('hnd-draft'); again ? this.next() : this.closeDrawer(); this.toast('Nota salvata');
       if (f.id && this.view === 'horse' && this.horse && saved.horse_id !== this.horse.id) { await this.lists(); location.hash = '#/horse/' + saved.horse_id; }

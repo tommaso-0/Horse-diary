@@ -346,10 +346,10 @@ tailwind.config = { theme: { extend: {
 
 <script>
 // Da Supabase: Project Settings > API (URL del progetto e chiave anon/publishable)
-const SB_URL = 'INCOLLA_QUI_URL', SB_KEY = 'INCOLLA_QUI_CHIAVE';
+const SB_URL = 'https://usvgkrjqdwiofzhsphht.supabase.co', SB_KEY = 'sb_publishable_8KWrc0WV-Jvao467WqUUpg_XEt-UoPb';
 let sb, uid;
 // true = prova in locale con dati nel browser (niente Supabase, niente login); false = versione online
-const LOCAL = true;
+const LOCAL = false;
 function localDb() {
   const KEY = 'hnd-local2';
   const seed = () => {

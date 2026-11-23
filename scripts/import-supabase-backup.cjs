@@ -20,11 +20,13 @@ function decodeCopy(value) {
 }
 function readCopy(sql, table) {
   const escaped = table.replace(/\./g, '\\.');
-  const re = new RegExp('COPY ' + escaped + ' \\(([^\\n]*)\\) FROM stdin;\\n([\\s\\S]*?)\\n\\\\\\.', 'm');
-  const match = sql.match(re);
-  if (!match) throw new Error('Sezione COPY non trovata: ' + table);
-  const columns = match[1].split(',').map(x => x.trim().replace(/^"|"$/g, ''));
-  return match[2].split('\n').filter(Boolean).map(line => {
+  const header = new RegExp('COPY ' + escaped + ' \\(([^\\n]*)\\) FROM stdin;\\n', 'm').exec(sql);
+  if (!header) throw new Error('Sezione COPY non trovata: ' + table);
+  const start = header.index + header[0].length;
+  const end = sql.indexOf('\n\\.\n', start);
+  if (end < 0) throw new Error('Fine sezione COPY non trovata: ' + table);
+  const columns = header[1].split(',').map(x => x.trim().replace(/^"|"$/g, ''));
+  return sql.slice(start, end).split('\n').filter(Boolean).map(line => {
     const values = line.split('\t').map(decodeCopy);
     if (values.length !== columns.length) throw new Error('Riga COPY non valida in ' + table);
     return Object.fromEntries(columns.map((key, i) => [key, values[i]]));

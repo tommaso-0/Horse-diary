@@ -47,7 +47,10 @@ tailwind.config = { theme: { extend: {
     <div><label for="l-mail" class="mb-1.5 block text-sm font-medium">Email</label><input id="l-mail" type="email" x-model="email" required autocomplete="username" class="fld"></div>
     <div><label for="l-pass" class="mb-1.5 block text-sm font-medium">Password</label><input id="l-pass" type="password" x-model="pass" required autocomplete="current-password" class="fld"></div>
     <p x-show="loginErr" role="alert" class="text-sm text-danger" x-text="loginErr"></p>
-    <button class="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-card">Entra</button>
+    <button class="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-card">Entra con email</button>
+    <button type="button" @click="resetPassword()" class="w-full text-sm text-mute hover:text-ink">Password dimenticata?</button>
+    <div class="relative py-1 text-center text-xs text-mute"><span class="bg-paper px-2">oppure</span><div class="absolute inset-x-0 top-1/2 -z-10 border-t border-line"></div></div>
+    <button type="button" @click="loginGoogle()" class="w-full rounded-lg border border-line bg-card px-4 py-2.5 text-sm font-medium hover:bg-soft">Accedi con Google</button>
   </form>
 </div>
 
@@ -486,9 +489,12 @@ function diary() { return {
       }
       if (method === 'DELETE') {
         const own = await ownQuery('performances').get();
-        const batch = db.batch();
-        own.docs.filter(d => Number(d.data().horse_id) === id).forEach(d => batch.delete(d.ref));
-        await batch.commit();
+        const related = own.docs.filter(d => Number(d.data().horse_id) === id);
+        for (let start = 0; start < related.length; start += 400) {
+          const batch = db.batch();
+          related.slice(start, start + 400).forEach(d => batch.delete(d.ref));
+          await batch.commit();
+        }
         const shared = await sharedRowsForHorse(id);
         if (shared.length) await ref.update({in_watchlist:false, profile_note:null, sharedVisible:true});
         else await ref.delete();
@@ -501,9 +507,12 @@ function diary() { return {
         if (!body.merge) throw new Error('Esiste già un cavallo con questo nome.');
         const me = data.horses.find(x => x.id === id);
         const own = await ownQuery('performances').get();
-        const batch = db.batch();
-        own.docs.filter(d => Number(d.data().horse_id) === id).forEach(d => batch.update(d.ref, {horse_id:clash.id}));
-        await batch.commit();
+        const related = own.docs.filter(d => Number(d.data().horse_id) === id);
+        for (let start = 0; start < related.length; start += 400) {
+          const batch = db.batch();
+          related.slice(start, start + 400).forEach(d => batch.update(d.ref, {horse_id:clash.id}));
+          await batch.commit();
+        }
         await db.collection('horses').doc(String(clash.id)).update({
           in_watchlist:!!(clash.in_watchlist || me.in_watchlist),
           profile_note:clash.profile_note || note
@@ -593,6 +602,21 @@ function diary() { return {
       this.loginErr = error.code === 'auth/too-many-requests'
         ? 'Troppi tentativi. Riprova più tardi.'
         : 'Email o password non corrette.';
+    }
+  },
+  async loginGoogle() {
+    this.loginErr = '';
+    try { await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
+    catch (error) { this.loginErr = 'Accesso con Google non riuscito. Riprova.'; }
+  },
+  async resetPassword() {
+    this.loginErr = '';
+    if (!this.email.trim()) { this.loginErr = 'Inserisci prima la tua email.'; return; }
+    try {
+      await auth.sendPasswordResetEmail(this.email.trim());
+      this.loginErr = 'Se l’indirizzo è registrato, riceverai un link per reimpostare la password.';
+    } catch (error) {
+      this.loginErr = 'Non è stato possibile inviare l’email di recupero.';
     }
   },
   async logout() { await auth.signOut(); location.hash = ''; location.reload(); },

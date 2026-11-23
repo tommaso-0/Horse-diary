@@ -48,7 +48,7 @@ async function main() {
   const profiles = readCopy(sql, 'public.profiles');
 
   for (const row of users) {
-    if (!row.id || !row.email || !/^\\$2[aby]\\$\\d{2}\\$/.test(row.encrypted_password || '') || row.encrypted_password.length !== 60) {
+    if (!row.id || !row.email || !/^\$2[aby]\$\d{2}\$/.test(row.encrypted_password || '') || row.encrypted_password.length !== 60) {
       throw new Error('Un account Supabase non contiene un hash bcrypt valido/importabile.');
     }
   }

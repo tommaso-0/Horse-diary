@@ -8,7 +8,9 @@
 <meta name="theme-color" content="#2F5D46">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="apple-touch-icon" href="icon.svg">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐎</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,600&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -346,167 +348,262 @@ tailwind.config = { theme: { extend: {
 
 <script>
 // Da Supabase: Project Settings > API (URL del progetto e chiave anon/publishable)
-const SB_URL = 'https://usvgkrjqdwiofzhsphht.supabase.co', SB_KEY = 'sb_publishable_8KWrc0WV-Jvao467WqUUpg_XEt-UoPb';
-let sb, uid;
-// true = prova in locale con dati nel browser (niente Supabase, niente login); false = versione online
-const LOCAL = false;
-function localDb() {
-  const KEY = 'hnd-local2';
-  const seed = () => {
-    const day = n => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
-    const H = ['VARENNE', 'TORNADO BAY', 'LUNA DI SETA', 'GRAN CAPITANO', 'SIR RENATO'];
-    const P = [
-      [0,2,'Capannelle','1600m','Buono','Handicap',4,['Finisce forte','Bene sul terreno'],'Rimontato in retta con facilità, passo lungo e rilassato.'],
-      [0,30,'San Siro','2000m','Pesante','Listed',3,['Terreno contrario','Chiuso in retta'],'Mai a suo agio sul pesante, chiuso all’ingresso in retta.'],
-      [1,2,'Capannelle','1600m','Buono','Handicap',2,['Partenza Lenta','Largo in curva'],'Scattato male, largo in curva, finito senza spunto.'],
-      [1,45,'Pisa','1800m','Soffice','Maiden',3,['Tira molto'],'Tira molto nella prima parte, spreca energie.'],
-      [2,9,'San Siro','1400m','Buono','Condizionata',5,['Margine in mano','Finisce forte'],'Vinto con margine in mano, fantino mai impegnato.'],
-      [3,16,'Milano','2400m','Buono','Gruppo 3',4,['Falsa andatura','Finisce forte'],'Andatura lenta, ha finito forte: da rivedere su un ritmo vero.'],
-      [3,60,'Pisa','2000m','Soffice','Handicap',3,['Bene sul terreno'],'Si trova bene sul soffice.'],
-      [4,5,'Capannelle','1200m','Buono','Reclamare',2,['Partenza Lenta'],'Partenza lenta, mai in corsa.'],
-      [4,40,'Firenze','1200m','Buono','Reclamare',3,[],'Corsa regolare, senza nulla di particolare.']];
-    const now = new Date().toISOString();
-    return {next:100, profiles:[{user_id:'me', display_name:'Tu'}, {user_id:'u2', display_name:'Marco'}],
-      horses: [...H.map((name, i) => ({id:i+1, name, in_watchlist:i < 2, user_id:'me', profile_note: i === 0 ? 'Da seguire sul miglio: parte piano ma ha un buon finale.' : null})),
-               {id:90, name:'VARENNE', in_watchlist:false, user_id:'u2', profile_note:null}],
-      performances: [...P.map((r, k) => ({id:k+1, horse_id:r[0]+1, race_date:day(r[1]), track:r[2], distance:r[3], going:r[4], race_type:r[5], rating:r[6], tags:r[7], notes:r[8], created_at:now, user_id:'me', shared:k === 0})),
-        {id:91, horse_id:90, race_date:day(6), track:'Roma', distance:'1600m', going:'Buono', race_type:'Handicap', rating:5, tags:['Margine in mano'], notes:'Visto dal vivo: vince in scioltezza, fantino mai impegnato.', created_at:now, user_id:'u2', shared:true}]};
-  };
-  const get = () => JSON.parse(localStorage.getItem(KEY) || 'null') || seed();
-  // Imita la parte di supabase-js che usa l'app (select/insert/update/delete + eq/in/single)
-  return { from(t) {
-    let op = 'select', row, flt = () => true, one = false;
-    const b = {
-      select() { return b; }, insert(r) { op = 'insert'; row = r; return b; }, update(r) { op = 'update'; row = r; return b; },
-      delete() { op = 'delete'; return b; }, eq(c, v) { flt = x => x[c] === v; return b; }, in(c, vs) { flt = x => vs.includes(x[c]); return b; },
-      single() { one = true; return b; },
-      then(res, rej) {
-        try {
-          const d = get(); let out;
-          if (op === 'insert') { out = [{id: d.next++, ...(t === 'horses' ? {in_watchlist:false, profile_note:null} : {created_at:new Date().toISOString(), shared:false}), user_id:'me', ...row}]; d[t].push(out[0]); }
-          else if (op === 'update') { out = d[t].filter(flt); out.forEach(x => Object.assign(x, row)); }
-          else if (op === 'delete') { out = d[t].filter(flt); d[t] = d[t].filter(x => !flt(x)); d.performances = d.performances.filter(p => d.horses.some(h => h.id === p.horse_id)); }
-          else out = d[t];
-          localStorage.setItem(KEY, JSON.stringify(d));
-          res({data: structuredClone(one ? (out[0] ?? null) : out), error: null});
-        } catch (e) { (rej || res)({data: null, error: {message: e.message}}); }
-      }
-    };
-    return b;
-  }};
-}
+const firebaseConfig = {
+  apiKey: "AIzaSyC9cVu8tUdPQMJxqbaa4Ra69J81_u8zjJ8",
+  authDomain: "horse-diary-33a2f.firebaseapp.com",
+  projectId: "horse-diary-33a2f",
+  storageBucket: "horse-diary-33a2f.firebasestorage.app",
+  messagingSenderId: "374679889923",
+  appId: "1:374679889923:web:5fc47841f5f2caaeef4636"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+let uid;
+
 const PRESET = ['Partenza Lenta','Chiuso in retta','Tira molto','Bene sul terreno','Terreno contrario','Falsa andatura','Largo in curva','Finisce forte','Margine in mano'];
-// Colore sobrio per significato: verde = positivo, argilla = negativo, ocra = andamento di gara
 const KIND = {'finisce forte':'pos','margine in mano':'pos','bene sul terreno':'pos','partenza lenta':'neg','chiuso in retta':'neg','terreno contrario':'neg','largo in curva':'neg','tira molto':'neu','falsa andatura':'neu'};
 const norm = s => (s || '').replace(/\s+/g, ' ').trim().toUpperCase();
 const pretty = n => (n || '').toLowerCase().replace(/(^|[\s-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase())
                               .replace(/(^|[\s-])(\p{L}')(\p{L})/gu, (m, a, b, c) => a + b + c.toUpperCase());
 const today = () => { const d = new Date(); return [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')].join('-'); };
 const blank = () => ({id:null, horse_name:'', race_date:today(), track:'', distance:'', going:'', race_type:'', shared:false, rating:null, tags:[], notes:'', in_watchlist:false});
+const docRow = d => ({...d.data(), id: d.data().id == null ? Number(d.id) : d.data().id});
+const ownQuery = collection => db.collection(collection).where('userId', '==', uid);
+
+async function nextId(kind) {
+  const ref = db.collection('_meta').doc('counters');
+  return db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    const field = kind === 'horse' ? 'nextHorseId' : 'nextPerformanceId';
+    const next = snap.exists && Number.isSafeInteger(snap.data()[field]) ? snap.data()[field] : Date.now();
+    tx.set(ref, {[field]: next + 1}, {merge:true});
+    return next;
+  });
+}
+
+async function sharedRowsForHorse(horseId) {
+  const snap = await db.collection('performances').where('shared', '==', true).get();
+  return snap.docs.filter(d => Number(d.data().horse_id) === Number(horseId));
+}
+
+async function refreshSharedVisible(horseId) {
+  const ref = db.collection('horses').doc(String(horseId));
+  const snap = await ref.get();
+  if (!snap.exists || snap.data().userId !== uid) return;
+  const shared = await sharedRowsForHorse(horseId);
+  await ref.update({sharedVisible: shared.length > 0});
+}
 
 function diary() { return {
-  view:'dash', ready:false, authed:false, started:false, local:LOCAL, hp:{open:false, name:'', note:'', err:''}, loginErr:'', email:'', pass:'', horses:[], meta:{tags:[],tracks:[]}, dash:{watchlist:[],recent:[],shared:[]}, horse:null,
+  view:'dash', ready:false, authed:false, started:false, local:false, hp:{open:false, name:'', note:'', err:''}, loginErr:'', email:'', pass:'', horses:[], meta:{tags:[],tracks:[]}, dash:{watchlist:[],recent:[],shared:[]}, horse:null,
   filter:{kind:'',value:'',items:[]}, q:'', open:false, drawer:false, saving:false, error:'', nameOpen:false,
   customTag:'', matched:null, toastMsg:'', form:blank(), pretty,
 
   async api(path, method='GET', body) {
     const [pp, qs] = path.split('?'), seg = pp.split('/').filter(Boolean), qp = new URLSearchParams(qs || ''), e = seg[0], id = Number(seg[1]);
-    const ok = r => { if (r.error) throw new Error(r.error.message); return r.data; };
-    // horses/perfs = i miei; shared = note che altri hanno condiviso con me (le regole del database nascondono il resto)
     const load = async () => {
-      const [h, p, pr] = await Promise.all([sb.from('horses').select('*'), sb.from('performances').select('*'), sb.from('profiles').select('*')]);
-      const all = ok(h), allP = ok(p), who = Object.fromEntries(ok(pr).map(x => [x.user_id, x.display_name])), by = Object.fromEntries(all.map(x => [x.id, x]));
-      allP.forEach(x => { x.horse_name = by[x.horse_id]?.name; x.mine = x.user_id === uid; x.author = who[x.user_id] || 'un altro utente'; });
+      const [h, sh, p, sp, pr] = await Promise.all([
+        ownQuery('horses').get(),
+        db.collection('horses').where('sharedVisible', '==', true).get(),
+        ownQuery('performances').get(),
+        db.collection('performances').where('shared', '==', true).get(),
+        db.collection('profiles').get()
+      ]);
+      const ownedHorses = h.docs.map(docRow);
+      const allHorsesMap = new Map();
+      [...h.docs, ...sh.docs].forEach(d => allHorsesMap.set(Number(d.data().id == null ? d.id : d.data().id), docRow(d)));
+      const allHorses = [...allHorsesMap.values()];
+      const byHorse = Object.fromEntries(allHorses.map(x => [x.id, x]));
+      const who = Object.fromEntries(pr.docs.map(d => [d.id, d.data().display_name || 'un altro utente']));
+      const allPerfMap = new Map();
+      [...p.docs, ...sp.docs].forEach(d => allPerfMap.set(Number(d.data().id == null ? d.id : d.data().id), docRow(d)));
+      const allP = [...allPerfMap.values()];
+      allP.forEach(x => {
+        x.horse_name = byHorse[x.horse_id]?.name || x.horse_name || 'Cavallo';
+        x.mine = x.userId === uid;
+        x.author = who[x.userId] || 'un altro utente';
+        x.tags = Array.isArray(x.tags) ? x.tags : [];
+      });
       allP.sort((a, b) => b.race_date.localeCompare(a.race_date) || b.id - a.id);
-      return {horses: all.filter(x => x.user_id === uid), perfs: allP.filter(x => x.mine), shared: allP.filter(x => !x.mine && x.shared)};
+      return {
+        horses: ownedHorses,
+        perfs: allP.filter(x => x.mine),
+        shared: allP.filter(x => !x.mine && x.shared),
+        allHorses
+      };
     };
-    // i cavalli esistono solo tramite le note: via quelli senza note e fuori watchlist
     const prune = async () => {
-      const {horses, perfs} = await load();
-      const dead = horses.filter(h => !h.in_watchlist && !perfs.some(p => p.horse_id === h.id)).map(h => h.id);
-      if (dead.length) ok(await sb.from('horses').delete().in('id', dead));
+      const data = await load();
+      for (const h of data.horses) {
+        if (h.in_watchlist || data.perfs.some(p => p.horse_id === h.id)) continue;
+        const shared = await sharedRowsForHorse(h.id);
+        if (shared.length) {
+          await db.collection('horses').doc(String(h.id)).update({sharedVisible:true});
+        } else {
+          await db.collection('horses').doc(String(h.id)).delete();
+        }
+      }
     };
     const summ = (horses, perfs) => horses.map(h => {
-      const l = perfs.find(p => p.horse_id === h.id);
-      return {...h, performances_count: perfs.filter(p => p.horse_id === h.id).length, last_date: l?.race_date, last_notes: l?.notes, last_rating: l?.rating};
+      const list = perfs.filter(p => p.horse_id === h.id);
+      const l = list[0];
+      return {...h, performances_count:list.length, last_date:l?.race_date, last_notes:l?.notes, last_rating:l?.rating};
     });
-    const cnt = a => { const m = new Map(); a.forEach(v => { const k = v.toLowerCase(), x = m.get(k) || {name:v, count:0}; x.count++; m.set(k, x); });
-      return [...m.values()].sort((x, y) => y.count - x.count || x.name.localeCompare(y.name)); };
+    const cnt = a => {
+      const m = new Map();
+      a.forEach(v => { const k = v.toLowerCase(), x = m.get(k) || {name:v, count:0}; x.count++; m.set(k, x); });
+      return [...m.values()].sort((x, y) => y.count - x.count || x.name.localeCompare(y.name));
+    };
     const sp = s => (s || '').replace(/\s+/g, ' ').trim(), up = s => s.charAt(0).toUpperCase() + s.slice(1);
 
     if (method === 'GET') {
       const {horses, perfs, shared} = await load();
       if (e === 'horses' && !seg[1]) return summ(horses, perfs);
       if (e === 'horses') {
-        const h = horses.find(x => x.id === id); if (!h) throw new Error('Cavallo non trovato');
-        // le mie note + quelle condivise da altri sullo stesso nome
+        const h = horses.find(x => x.id === id);
+        if (!h) throw new Error('Cavallo non trovato');
         const list = [...perfs.filter(p => p.horse_id === id), ...shared.filter(p => p.horse_name === h.name)];
-        return {...h, performances: list.sort((a, b) => b.race_date.localeCompare(a.race_date) || b.id - a.id)};
+        return {...h, performances:list.sort((a, b) => b.race_date.localeCompare(a.race_date) || b.id - a.id)};
       }
       if (e === 'dashboard') return {
-        watchlist: summ(horses, perfs).filter(h => h.in_watchlist).sort((a, b) => (b.last_date || '').localeCompare(a.last_date || '')),
-        recent: [...perfs].sort((a, b) => b.id - a.id).slice(0, 10), shared: shared.slice(0, 10)};
-      if (e === 'meta') return {tracks: cnt(perfs.map(p => p.track).filter(Boolean)), tags: cnt(perfs.flatMap(p => p.tags))};
+        watchlist:summ(horses, perfs).filter(h => h.in_watchlist).sort((a, b) => (b.last_date || '').localeCompare(a.last_date || '')),
+        recent:[...perfs].sort((a, b) => b.id - a.id).slice(0, 10),
+        shared:shared.slice(0, 10)
+      };
+      if (e === 'meta') return {tracks:cnt(perfs.map(p => p.track).filter(Boolean)), tags:cnt(perfs.flatMap(p => p.tags || []))};
       const t = qp.get('tag')?.toLowerCase(), k = qp.get('track')?.toLowerCase();
       return perfs.filter(p => (!t || p.tags.some(x => x.toLowerCase() === t)) && (!k || (p.track || '').toLowerCase() === k));
     }
+
     if (e === 'horses') {
-      if (seg[2] === 'watchlist') { ok(await sb.from('horses').update({in_watchlist: body.in_watchlist}).eq('id', id)); return {id, in_watchlist: body.in_watchlist}; }
-      if (method === 'DELETE') { ok(await sb.from('horses').delete().eq('id', id)); return {ok:true}; }  // le note collegate vanno via con lui
-      const {horses} = await load(), name = norm(body.name), note = (body.profile_note || '').trim() || null;
-      if (!name) throw new Error('Il nome non può essere vuoto.');
-      const clash = horses.find(x => x.name === name && x.id !== id);
-      if (clash) {  // unione di due schede: le note passano al cavallo già esistente
-        if (!body.merge) throw new Error('Esiste già un cavallo con questo nome.');
-        const me = horses.find(x => x.id === id);
-        ok(await sb.from('performances').update({horse_id: clash.id}).eq('horse_id', id));
-        ok(await sb.from('horses').update({in_watchlist: clash.in_watchlist || me.in_watchlist, profile_note: clash.profile_note || note}).eq('id', clash.id));
-        ok(await sb.from('horses').delete().eq('id', id));
-        return {id: clash.id};
+      const ref = db.collection('horses').doc(String(id));
+      const snap = await ref.get();
+      if (!snap.exists || snap.data().userId !== uid) throw new Error('Cavallo non trovato');
+      if (seg[2] === 'watchlist') {
+        await ref.update({in_watchlist:!!body.in_watchlist});
+        return {id, in_watchlist:!!body.in_watchlist};
       }
-      ok(await sb.from('horses').update({name, profile_note: note}).eq('id', id));
+      if (method === 'DELETE') {
+        const own = await ownQuery('performances').get();
+        const batch = db.batch();
+        own.docs.filter(d => Number(d.data().horse_id) === id).forEach(d => batch.delete(d.ref));
+        await batch.commit();
+        const shared = await sharedRowsForHorse(id);
+        if (shared.length) await ref.update({in_watchlist:false, profile_note:null, sharedVisible:true});
+        else await ref.delete();
+        return {ok:true};
+      }
+      const data = await load(), name = norm(body.name), note = (body.profile_note || '').trim() || null;
+      if (!name) throw new Error('Il nome non può essere vuoto.');
+      const clash = data.horses.find(x => x.name === name && x.id !== id);
+      if (clash) {
+        if (!body.merge) throw new Error('Esiste già un cavallo con questo nome.');
+        const me = data.horses.find(x => x.id === id);
+        const own = await ownQuery('performances').get();
+        const batch = db.batch();
+        own.docs.filter(d => Number(d.data().horse_id) === id).forEach(d => batch.update(d.ref, {horse_id:clash.id}));
+        await batch.commit();
+        await db.collection('horses').doc(String(clash.id)).update({
+          in_watchlist:!!(clash.in_watchlist || me.in_watchlist),
+          profile_note:clash.profile_note || note
+        });
+        const sharedOld = await sharedRowsForHorse(id);
+        if (sharedOld.length) await ref.update({name, sharedVisible:true, in_watchlist:false, profile_note:null});
+        else await ref.delete();
+        await refreshSharedVisible(clash.id);
+        return {id:clash.id};
+      }
+      await ref.update({name, profile_note:note});
       return {id};
     }
-    if (method === 'DELETE') { ok(await sb.from('performances').delete().eq('id', id)); await prune(); return {ok:true}; }
 
-    // POST / PUT di una nota: valida, normalizza, crea il cavallo se nuovo
+    if (method === 'DELETE') {
+      const ref = db.collection('performances').doc(String(id));
+      const snap = await ref.get();
+      if (!snap.exists || snap.data().userId !== uid) throw new Error('Nota non trovata o non eliminabile.');
+      const horseId = Number(snap.data().horse_id);
+      await ref.delete();
+      await refreshSharedVisible(horseId);
+      await prune();
+      return {ok:true};
+    }
+
     const name = norm(body.horse_name), notes = (body.notes || '').trim();
     if (!name || name.length > 80) throw new Error('Il nome del cavallo è obbligatorio (max 80 caratteri).');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(body.race_date)) throw new Error('Data non valida.');
     if (!notes) throw new Error('La nota non può essere vuota.');
-    const {horses} = await load();
-    const h = horses.find(x => x.name === name) || ok(await sb.from('horses').insert({name}).select().single());
-    let dist = sp(body.distance); if (/^\d{3,5}\s?[mM]?$/.test(dist)) dist = dist.replace(/\D/g, '') + 'm';
+    const data = await load();
+    let h = data.horses.find(x => x.name === name);
+    if (!h) {
+      const horseId = await nextId('horse');
+      h = {id:horseId, name, in_watchlist:false, userId:uid, profile_note:null, sharedVisible:false};
+      await db.collection('horses').doc(String(horseId)).set(h);
+    }
+    let oldHorseId = null, existing = null;
+    if (method === 'PUT') {
+      const oldRef = db.collection('performances').doc(String(id));
+      const oldSnap = await oldRef.get();
+      if (!oldSnap.exists || oldSnap.data().userId !== uid) throw new Error('Nota non trovata o non modificabile.');
+      existing = oldSnap.data();
+      oldHorseId = Number(existing.horse_id);
+    }
+    let dist = sp(body.distance);
+    if (/^\d{3,5}\s?[mM]?$/.test(dist)) dist = dist.replace(/\D/g, '') + 'm';
     const going = sp(body.going), seen = new Set(), tags = [];
-    for (let t of body.tags || []) { t = up(sp(t).slice(0, 40)); if (t && !seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); tags.push(t); } }
-    const row = {horse_id:h.id, race_date:body.race_date, track: sp(body.track).split(' ').map(up).join(' ') || null, distance: dist || null,
-                 going: going ? up(going) : null, race_type: sp(body.race_type) ? up(sp(body.race_type)) : null, shared: !!body.shared, rating: body.rating || null, tags, notes};
-    const saved = ok(await (method === 'PUT' ? sb.from('performances').update(row).eq('id', id) : sb.from('performances').insert(row)).select().single());
-    if (body.in_watchlist != null) ok(await sb.from('horses').update({in_watchlist: body.in_watchlist}).eq('id', h.id));
+    for (let t of body.tags || []) {
+      t = up(sp(t).slice(0, 40));
+      if (t && !seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); tags.push(t); }
+    }
+    const performanceId = method === 'PUT' ? id : await nextId('performance');
+    const row = {
+      id:performanceId, horse_id:h.id, race_date:body.race_date,
+      track:sp(body.track).split(' ').map(up).join(' ') || null,
+      distance:dist || null, going:going ? up(going) : null,
+      race_type:sp(body.race_type) ? up(sp(body.race_type)) : null,
+      shared:!!body.shared, rating:body.rating || null, tags, notes,
+      created_at:existing?.created_at || new Date().toISOString(), userId:uid
+    };
+    await db.collection('performances').doc(String(performanceId)).set(row);
+    if (body.in_watchlist != null) await db.collection('horses').doc(String(h.id)).update({in_watchlist:!!body.in_watchlist});
+    await refreshSharedVisible(h.id);
+    if (oldHorseId != null && oldHorseId !== h.id) await refreshSharedVisible(oldHorseId);
     await prune();
-    return {...saved, horse_name: name};
+    return {...row, horse_name:name, mine:true};
   },
+
   async init() {
-    sb = LOCAL ? localDb() : supabase.createClient(SB_URL, SB_KEY);
-    if (LOCAL) { uid = 'me'; this.authed = true; return this.start(); }
-    const {data} = await sb.auth.getSession();
-    if (data.session) { uid = data.session.user.id; this.authed = true; await this.start(); }
+    await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+    auth.onAuthStateChanged(async user => {
+      if (!user) {
+        uid = null; this.authed = false; this.ready = false; this.started = false;
+        return;
+      }
+      uid = user.uid; this.authed = true;
+      try { await this.start(); }
+      catch (e) { this.ready = false; this.toast(e.message || 'Errore durante il caricamento.'); }
+    });
   },
   async login() {
     this.loginErr = '';
-    const {data, error} = await sb.auth.signInWithPassword({email:this.email, password:this.pass});
-    if (error) { this.loginErr = 'Email o password non corrette.'; return; }
-    uid = data.user.id; this.pass = ''; this.authed = true; await this.start();
+    try {
+      await auth.signInWithEmailAndPassword(this.email, this.pass);
+      this.pass = '';
+    } catch (error) {
+      this.loginErr = error.code === 'auth/too-many-requests'
+        ? 'Troppi tentativi. Riprova più tardi.'
+        : 'Email o password non corrette.';
+    }
   },
-  async logout() { await sb.auth.signOut(); location.hash = ''; location.reload(); },
+  async logout() { await auth.signOut(); location.hash = ''; location.reload(); },
   async start() {
-    if (this.started) return; this.started = true;
+    if (this.started) return;
+    this.started = true;
     await this.ensureName();
     await this.lists();
     addEventListener('hashchange', () => { this.route(); scrollTo(0, 0); });
     await this.route(); this.ready = true;
     this.$watch('form', f => { if (this.drawer && !f.id) try { localStorage.setItem('hnd-draft', JSON.stringify(f)); } catch {} });
-    // Se il nome digitato coincide con un cavallo esistente, eredita il suo stato di watchlist
     this.$watch('form.horse_name', v => {
       const h = this.horses.find(x => x.name === norm(v)), id = h ? h.id : null;
       if (id !== this.matched) { this.matched = id; if (h) this.form.in_watchlist = h.in_watchlist; }
@@ -523,13 +620,12 @@ function diary() { return {
     try {
       if (p[0] === 'horse' && p[1]) { this.horse = await this.api('/horses/' + p[1]); this.view = 'horse'; }
       else if ((p[0] === 'tag' || p[0] === 'track') && p[1]) {
-        this.filter = {kind:p[0], value:p[1], items: await this.api('/performances?' + p[0] + '=' + encodeURIComponent(p[1]))}; this.view = 'filter';
+        this.filter = {kind:p[0], value:p[1], items:await this.api('/performances?' + p[0] + '=' + encodeURIComponent(p[1]))}; this.view = 'filter';
       } else { this.dash = await this.api('/dashboard'); this.view = 'dash'; }
     } catch (e) { this.toast(e.message); if (location.hash && location.hash !== '#/') location.hash = '#/'; }
   },
   async reload() { await Promise.all([this.lists(), this.route()]); },
 
-  // ricerca
   get items() {
     const n = norm(this.q); if (!n) return [];
     const r = this.horses.filter(h => h.name.includes(n))
@@ -540,7 +636,6 @@ function diary() { return {
   },
   pick(it) { this.open = false; this.q = ''; it.horse ? location.hash = '#/horse/' + it.horse.id : this.openNew(it.name); },
 
-  // form
   get sugg() {
     const n = norm(this.form.horse_name); if (!n) return [];
     const m = this.horses.filter(h => h.name.includes(n));
@@ -570,7 +665,7 @@ function diary() { return {
   openNew(name = '', h = null) {
     h = h || this.horses.find(x => x.name === norm(name));
     this.matched = h ? h.id : null;
-    this.form = {...blank(), horse_name: h ? pretty(h.name) : pretty(name), in_watchlist: h ? h.in_watchlist : false};
+    this.form = {...blank(), horse_name:h ? pretty(h.name) : pretty(name), in_watchlist:h ? h.in_watchlist : false};
     const dr = !name && !h && JSON.parse(localStorage.getItem('hnd-draft') || 'null');
     if (dr && (dr.notes || dr.horse_name)) { this.form = {...blank(), ...dr, id:null}; this.matched = null; this.toast('Bozza ripristinata'); }
     this.show(!!this.form.horse_name);
@@ -579,15 +674,14 @@ function diary() { return {
     const h = this.horses.find(x => x.id === p.horse_id);
     this.matched = p.horse_id;
     this.form = {id:p.id, horse_name:pretty(p.horse_name), race_date:p.race_date, track:p.track||'', distance:p.distance||'', going:p.going||'', race_type:p.race_type||'', shared:!!p.shared,
-                 rating:p.rating, tags:[...p.tags], notes:p.notes, in_watchlist: h ? h.in_watchlist : false};
+                 rating:p.rating, tags:[...p.tags], notes:p.notes, in_watchlist:h ? h.in_watchlist : false};
     this.show(true);
   },
-  async ensureName() {  // nome mostrato agli altri ("condivisa da ...")
-    if (LOCAL) return;
-    const {data} = await sb.from('profiles').select('user_id').eq('user_id', uid);
-    if (data && data.length) return;
+  async ensureName() {
+    const ref = db.collection('profiles').doc(uid), snap = await ref.get();
+    if (snap.exists) return;
     const n = (prompt('Che nome vuoi mostrare agli altri utenti?') || '').trim() || 'Utente';
-    await sb.from('profiles').upsert({user_id: uid, display_name: n});
+    await ref.set({user_id:uid, display_name:n});
   },
   sharedHref(p) { const h = this.horses.find(x => x.name === p.horse_name); return h ? '#/horse/' + h.id : '#/'; },
   openProfile() { this.hp = {open:true, name:pretty(this.horse.name), note:this.horse.profile_note || '', err:''}; },
@@ -607,7 +701,6 @@ function diary() { return {
     try { await this.api('/horses/' + this.horse.id, 'DELETE'); this.hp.open = false; this.toast('Cavallo eliminato'); await this.lists(); location.hash = '#/'; }
     catch (e) { this.hp.err = e.message; }
   },
-  // Gara in sequenza: tiene data, ippodromo, distanza, terreno e tipo; svuota il resto
   next() {
     const f = this.form; this.matched = null;
     this.form = {...blank(), race_date:f.race_date, track:f.track, distance:f.distance, going:f.going, race_type:f.race_type};
@@ -638,11 +731,10 @@ function diary() { return {
     if (last) { await this.lists(); location.hash = '#/'; } else await this.reload();
   },
   async toggleWatch() {
-    const r = await this.api('/horses/' + this.horse.id + '/watchlist', 'PUT', {in_watchlist: !this.horse.in_watchlist});
-    this.horse.in_watchlist = r.in_watchlist; this.lists();
+    const r = await this.api('/horses/' + this.horse.id + '/watchlist', 'PUT', {in_watchlist:!this.horse.in_watchlist});
+    this.horse.in_watchlist = r.in_watchlist; await this.lists();
   },
 
-  // vista
   get summary() {
     const p = this.horse.performances, r = p.filter(x => x.rating).map(x => x.rating);
     return p.length + (p.length === 1 ? ' uscita annotata' : ' uscite annotate') +

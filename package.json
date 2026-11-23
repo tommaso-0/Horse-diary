@@ -1,0 +1,12 @@
+{
+  "name": "horse-diary-firebase-migration",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Local admin tooling for migrating Horse Diary data to Firebase",
+  "scripts": {
+    "migrate:dry": "node scripts/import-supabase-backup.cjs --dry-run"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0"
+  }
+}

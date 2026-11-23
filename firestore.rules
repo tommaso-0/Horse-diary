@@ -21,6 +21,18 @@ service cloud.firestore {
       allow create, update: if signedIn() && request.auth.uid == userId && request.resource.data.user_id == request.auth.uid;
       allow delete: if signedIn() && request.auth.uid == userId;
     }
-    match /_meta/{document=**} { allow read, write: if signedIn(); }
+    match /_meta/counters {
+      allow get: if signedIn();
+      allow list, create, delete: if false;
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nextHorseId', 'nextPerformanceId'])
+        && (
+          (request.resource.data.nextHorseId == resource.data.nextHorseId + 1
+            && request.resource.data.nextPerformanceId == resource.data.nextPerformanceId)
+          ||
+          (request.resource.data.nextPerformanceId == resource.data.nextPerformanceId + 1
+            && request.resource.data.nextHorseId == resource.data.nextHorseId)
+        );
+    }
   }
 }

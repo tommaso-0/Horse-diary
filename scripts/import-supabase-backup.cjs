@@ -36,15 +36,37 @@ function num(v) { return v == null ? null : Number(v); }
 function parseJson(v, fallback) { return v == null ? fallback : JSON.parse(v); }
 
 async function main() {
-  const dumpPath = process.argv[2];
-  if (!dumpPath) throw new Error('Uso: node scripts/import-supabase-backup.cjs <backup.sql.gz|backup.sql>');
-  if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) throw new Error('Imposta GOOGLE_APPLICATION_CREDENTIALS con il percorso locale della chiave Admin SDK.');
+  const args = process.argv.slice(2);
+  const dryRun = args.includes('--dry-run');
+  const dumpPath = args.find(arg => arg !== '--dry-run');
+  if (!dumpPath) throw new Error('Uso: node scripts/import-supabase-backup.cjs [--dry-run] <backup.sql.gz|backup.sql>');
   const raw = fs.readFileSync(dumpPath);
   const sql = dumpPath.endsWith('.gz') ? zlib.gunzipSync(raw).toString('utf8') : raw.toString('utf8');
   const users = readCopy(sql, 'auth.users');
   const horses = readCopy(sql, 'public.horses');
   const performances = readCopy(sql, 'public.performances');
   const profiles = readCopy(sql, 'public.profiles');
+
+  for (const row of users) {
+    if (!row.id || !row.email || !/^\\$2[aby]\\$\\d{2}\\$/.test(row.encrypted_password || '') || row.encrypted_password.length !== 60) {
+      throw new Error('Un account Supabase non contiene un hash bcrypt valido/importabile.');
+    }
+  }
+  if (dryRun) {
+    console.log(JSON.stringify({
+      mode:'dry-run',
+      sourceUsers:users.length,
+      bcryptHashesValidated:users.length,
+      horses:horses.length,
+      performances:performances.length,
+      profiles:profiles.length,
+      note:'Nessun accesso Firebase e nessuna scrittura sono stati eseguiti.'
+    }, null, 2));
+    return;
+  }
+  if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    throw new Error('Imposta GOOGLE_APPLICATION_CREDENTIALS con il percorso locale della chiave Admin SDK.');
+  }
 
   admin.initializeApp({credential:admin.credential.applicationDefault()});
   const auth = admin.auth(), db = admin.firestore();

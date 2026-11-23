@@ -48,11 +48,14 @@ async function main() {
 
   admin.initializeApp({credential:admin.credential.applicationDefault()});
   const auth = admin.auth(), db = admin.firestore();
-  const existingByEmail = new Map();
+  const existingByEmail = new Map(), existingByUid = new Map();
   let token;
   do {
     const page = await auth.listUsers(1000, token);
-    for (const user of page.users) if (user.email) existingByEmail.set(user.email.toLowerCase(), user);
+    for (const user of page.users) {
+      existingByUid.set(user.uid, user);
+      if (user.email) existingByEmail.set(user.email.toLowerCase(), user);
+    }
     token = page.pageToken;
   } while (token);
 
@@ -61,7 +64,7 @@ async function main() {
     if (!row.id || !row.email || !row.encrypted_password || row.encrypted_password === 'authenticate') {
       throw new Error('Un account Supabase non contiene una password bcrypt importabile.');
     }
-    const existing = existingByEmail.get(row.email.toLowerCase());
+    const existing = existingByEmail.get(row.email.toLowerCase()) || existingByUid.get(row.id);
     if (existing) uidMap.set(row.id, existing.uid);
     else {
       toImport.push({uid:row.id,email:row.email,emailVerified:row.email_confirmed_at != null,

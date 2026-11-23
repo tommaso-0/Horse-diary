@@ -6,26 +6,26 @@ const admin = require('firebase-admin');
 
 function decodeCopy(value) {
   if (value === '\\N') return null;
-  return value.replace(/\\\\(\\\\|t|n|r|b|f|v|[0-7]{1,3}|x[0-9A-Fa-f]{1,2})/g, (_, esc) => {
-    if (esc === '\\\\') return '\\\\';
-    if (esc === 't') return '\\t';
-    if (esc === 'n') return '\\n';
-    if (esc === 'r') return '\\r';
-    if (esc === 'b') return '\\b';
-    if (esc === 'f') return '\\f';
-    if (esc === 'v') return '\\v';
+  return value.replace(/\\(\\|t|n|r|b|f|v|[0-7]{1,3}|x[0-9A-Fa-f]{1,2})/g, (_, esc) => {
+    if (esc === '\\') return '\\';
+    if (esc === 't') return '\t';
+    if (esc === 'n') return '\n';
+    if (esc === 'r') return '\r';
+    if (esc === 'b') return '\b';
+    if (esc === 'f') return '\f';
+    if (esc === 'v') return '\v';
     if (esc[0] === 'x') return String.fromCharCode(parseInt(esc.slice(1), 16));
     return String.fromCharCode(parseInt(esc, 8));
   });
 }
 function readCopy(sql, table) {
-  const escaped = table.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+  const escaped = table.replace(/\./g, '\\.');
   const re = new RegExp('COPY ' + escaped + ' \\(([^\\n]*)\\) FROM stdin;\\n([\\s\\S]*?)\\n\\\\\\.', 'm');
   const match = sql.match(re);
   if (!match) throw new Error('Sezione COPY non trovata: ' + table);
   const columns = match[1].split(',').map(x => x.trim().replace(/^"|"$/g, ''));
-  return match[2].split('\\n').filter(Boolean).map(line => {
-    const values = line.split('\\t').map(decodeCopy);
+  return match[2].split('\n').filter(Boolean).map(line => {
+    const values = line.split('\t').map(decodeCopy);
     if (values.length !== columns.length) throw new Error('Riga COPY non valida in ' + table);
     return Object.fromEntries(columns.map((key, i) => [key, values[i]]));
   });
